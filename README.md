@@ -5,6 +5,7 @@ Lines are matched by overlapping time, then reviewed in a browser editor before 
 
 ## Usage
 - Run `python syncsub.py` (or `syncsub.exe`), settings and editor open in browser (http://127.0.0.1:5000, or a free port if 5000 is busy)
+- File / Folder / Save as buttons open the Windows file dialog (on the computer running syncsub)
 - Empty output = `<timed sub name>.synced.ass` next to timed sub. If 2 versions are offset (BD vs TV), set "Shift OCR sub (ms)"
 - Season mode: put 2 folders in Timed sub / OCR sub, files are paired by episode number
   (`S01E05`, `- 05`, `05 [1080p]`...). Output field can be a folder, otherwise outputs go next to timed subs.

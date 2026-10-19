@@ -916,6 +916,10 @@ def config_ui():
         input[type="checkbox"] { margin-right: 10px; }
         .checkbox-group { display: flex; align-items: center; gap: 20px; margin-bottom: 10px; }
         .columns { display: flex; gap: 20px; }
+        .path-row { display: flex; gap: 6px; }
+        .path-row input { flex: 1; min-width: 0; }
+        .browse { padding: 0 12px; background-color: #3a3a3a; color: #e0e0e0; border: 1px solid #555; border-radius: 4px; cursor: pointer; }
+        .browse:hover { background-color: #4a4a4a; }
         .column { flex: 1; }
         .btn { display: block; width: 100%; padding: 15px; background-color: #007bff; color: white; border: none; border-radius: 4px; font-size: 16px; cursor: pointer; transition: background 0.3s; }
         .btn:hover { background-color: #0056b3; }
@@ -933,21 +937,33 @@ def config_ui():
                     <h3>Timed Files</h3>
                     <div class="form-group">
                         <label title="{{ tip.origin_sub_path }}">Timed sub</label>
-                        <input type="text" id="origin_sub_path" value="{{ p.origin_sub_path }}">
+                        <div class="path-row">
+                            <input type="text" id="origin_sub_path" value="{{ p.origin_sub_path }}">
+                            <button type="button" class="browse" onclick="browse('origin_sub_path', 'file')">File</button>
+                            <button type="button" class="browse" onclick="browse('origin_sub_path', 'folder')">Folder</button>
+                        </div>
                     </div>
                 </div>
                 <div class="column">
                     <h3>OCR Files</h3>
                     <div class="form-group">
                         <label title="{{ tip.ocr_sub_path }}">OCR sub</label>
-                        <input type="text" id="ocr_sub_path" value="{{ p.ocr_sub_path }}">
+                        <div class="path-row">
+                            <input type="text" id="ocr_sub_path" value="{{ p.ocr_sub_path }}">
+                            <button type="button" class="browse" onclick="browse('ocr_sub_path', 'file')">File</button>
+                            <button type="button" class="browse" onclick="browse('ocr_sub_path', 'folder')">Folder</button>
+                        </div>
                     </div>
                 </div>
             </div>
 
             <div class="form-group" style="margin-top: 20px;">
-                <label title="{{ tip.output_filename }}">Output Filename</label>
-                <input type="text" id="output_filename" value="{{ p.output_filename }}">
+                <label title="{{ tip.output_filename }}">Output Filename (empty = next to timed sub)</label>
+                <div class="path-row">
+                    <input type="text" id="output_filename" value="{{ p.output_filename }}">
+                    <button type="button" class="browse" onclick="browse('output_filename', 'save')">Save as</button>
+                    <button type="button" class="browse" onclick="browse('output_filename', 'folder')">Folder</button>
+                </div>
             </div>
 
             <h3>For Dialogue:</h3>
@@ -990,6 +1006,14 @@ def config_ui():
     </div>
 
     <script>
+        // Open a native file/folder dialog (on the computer running syncsub) and fill the path
+        function browse(id, kind) {
+            const input = document.getElementById(id);
+            fetch('/browse?kind=' + kind + '&current=' + encodeURIComponent(input.value))
+                .then(response => response.json())
+                .then(res => { if (res.path) input.value = res.path; });
+        }
+
         function submitConfig() {
             document.getElementById('loading').style.display = 'block';
             const data = {
@@ -1029,6 +1053,28 @@ def config_ui():
 </body>
 </html>
 """, p=dict(parameter, **batch["form"]), tip=default_config["Tooltip"])
+
+@app.route('/browse')
+def browse():
+    # Native file/folder dialog on this computer (a web page can't get full paths)
+    import tkinter, tkinter.filedialog
+    kind = request.args.get("kind", "file")
+    current = request.args.get("current", "")
+    initial = current if os.path.isdir(current) else os.path.dirname(current)
+    initial = initial if os.path.isdir(initial) else None
+    root = tkinter.Tk()
+    root.withdraw()
+    root.attributes("-topmost", True)
+    if kind == "folder":
+        path = tkinter.filedialog.askdirectory(parent=root, initialdir=initial)
+    elif kind == "save":
+        path = tkinter.filedialog.asksaveasfilename(parent=root, initialdir=initial, defaultextension=".ass",
+                                                    filetypes=[("ASS subtitle", "*.ass")])
+    else:
+        path = tkinter.filedialog.askopenfilename(parent=root, initialdir=initial,
+                                                  filetypes=[("Subtitle", " ".join("*" + e for e in sub_extensions)), ("All files", "*.*")])
+    root.destroy()
+    return jsonify({"path": os.path.normpath(path) if path else ""})
 
 @app.route('/process', methods=['POST'])
 def process_route():
