@@ -1,0 +1,51 @@
+
+name: Python application
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pyinstaller
+
+    - name: Test
+      run: python -m unittest discover test
+
+    - name: Create Executable
+      run: |
+        pyinstaller --onefile --clean --collect-data pyvi --hidden-import sklearn_crfsuite syncsub.py
+
+    - name: Copy files
+      run: |
+        copy default.yaml .\dist\
+        copy filter_rules.txt .\dist\
+      shell: cmd
+        
+    - name: Upload ZIP artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: syncsub
+        path: .\dist\*
+        overwrite: true
+        compression-level: 9
+        retention-days: 5

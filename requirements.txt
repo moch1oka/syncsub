@@ -1,0 +1,7 @@
+setuptools
+pysubs2
+textdistance
+colour
+PyYAML
+pyvi
+flask

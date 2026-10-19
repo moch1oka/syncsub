@@ -1,0 +1,38 @@
+# Luật sửa sub OCR, mỗi dòng 1 luật: kiểu________tìm________thay
+# Bỏ # ở đầu dòng để bật luật. Lỗi bảng mã (e + dấu tách rời) đã được tự sửa bằng Unicode NFC.
+#   replace       thay chuỗi y nguyên (\uXXXX = ký tự unicode)
+#   replace_word  chỉ thay khi là cả từ
+#   regex         biểu thức chính quy, \U...\E viết hoa, \L...\E viết thường
+
+# Ký tự OCR hay nhận sai
+# replace________å________ả
+# replace________ὰ________à
+# replace________ά________á
+# replace________ᾰ________ă
+# replace________ἀ________ả
+# replace________ᾶ________ã
+# replace________Μ________M
+# replace________о________o
+# replace________ē________ẽ
+# replace________Å________Ả
+# replace________…________...
+
+# Bỏ gạch đầu dòng
+#regex________\n- ________\n
+#regex________^- ________
+#regex________\n - ________\n
+#regex________^ - ________
+
+# Dấu câu, viết hoa / viết thường sau dấu
+#regex________([\.\?\!\;\:\,])([^ \.])________\1 \2
+#regex________([\;\,]) ([^ ])________\1 \L\2\E
+#regex________([\.\?\!\:]) ([^ ])________\1 \U\2\E
+#regex________([^\.])\.\.([^\.])________\1...\2
+#regex________([^\.])\.\.$________\1...
+#regex________([^\.])\.\.\.(\.)+________\1...
+#regex________([^\.])\.(\.)+ \.(\.)+$________\1...
+#regex________([^\.])\.\.+ \.\.+([^\.])________\1... \2
+#regex________([^\.])\.\.+ \.\.+ ([^\.])________\1... \2
+
+# Ví dụ replace_word
+#replace_word________ko________không

@@ -1,0 +1,48 @@
+1
+00:00:00,200 --> 00:00:00,900
+PHIM NGẮN MINH HỌA
+
+2
+00:00:01,020 --> 00:00:03,480
+Chào buổi sáng, Lena. Hôm nay cô đến sớm thế.
+
+3
+00:00:03,620 --> 00:00:04,900
+<i>Tôi không ngủ được. Cả đêm mưa to quá.</i>
+
+4
+00:00:04,900 --> 00:00:06,180
+<i>Tôi không ngủ được. Cả đêm mưa to quá.</i>
+
+5
+00:00:06,320 --> 00:00:08,400
+Cô làm xong báo cáo cho đội trưởng chưa?
+
+6
+00:00:08,450 --> 00:00:10,780
+Hôm qua chị ấy có hỏi đấy.
+
+7
+00:00:11,020 --> 00:00:15,380
+Gần xong rồi. Tôi chỉ cần kiểm tra lại số liệu.
+
+8
+00:00:19,520 --> 00:00:23,980
+Nếu số liệu không khớp thì chúng ta sẽ phải quay lại nhà kho để kiểm tra một lần nữa.
+
+9
+00:00:27,300 --> 00:00:29,000
+Khoan. Cô có nghe thấy gì không?
+
+10
+00:00:30,050 --> 00:00:31,980
+Chắc chỉ là gió thôi.
+カタカナテスト
+
+11
+00:00:33,000 --> 00:00:35,000
+{\pos(960,540)}LỐI THOÁT HIỂM
+
+12
+00:00:43,000 --> 00:00:45,000
+Biên dịch: nhóm thử nghiệm

@@ -1,0 +1,29 @@
+﻿[Script Info]
+; Sample subtitle written for syncsub tests
+Title: syncsub test sample
+ScriptType: v4.00+
+WrapStyle: 0
+ScaledBorderAndShadow: yes
+PlayResX: 1920
+PlayResY: 1080
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,Arial,72,&H00FFFFFF,&H00FFFFFF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,3.6,1.5,2,200,200,60,1
+Style: Sign,Arial,60,&H00FFFFFF,&H00FFFFFF,&H00202020,&H00000000,-1,0,0,0,100,100,0,0,1,2,0,8,30,30,30,1
+Style: Song,Arial,64,&H0000FEFF,&H000000FF,&H00B8DF00,&H00B8DF00,-1,0,0,0,100,100,0,0,1,1,2,2,30,30,30,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:01.00,0:00:03.50,Default,Mark,0,0,0,,Morning, Lena. You're early today.
+Dialogue: 0,0:00:03.60,0:00:06.20,Default,Lena,0,0,0,,{\i1}Couldn't sleep. The rain kept me up all night.{\i0}
+Dialogue: 0,0:00:06.30,0:00:10.80,Default,Mark,0,0,0,,Did you finish the report for the captain?\NShe was asking about it yesterday.
+Dialogue: 0,0:00:11.00,0:00:12.90,Default,Lena,0,0,0,,Almost.
+Dialogue: 0,0:00:12.90,0:00:15.40,Default,Lena,0,0,0,,I just need to check the numbers again.
+Comment: 0,0:00:15.00,0:00:15.50,Default,note,0,0,0,,check timing of this scene later
+Dialogue: 0,0:00:16.00,0:00:19.00,Sign,,0,0,0,,{\an8\pos(960,80)}CITY POLICE DEPARTMENT
+Dialogue: 0,0:00:19.50,0:00:24.00,Default,Mark,0,0,0,,If the numbers don't add up, we'll have to go back to the warehouse.
+Dialogue: 0,0:00:25.00,0:00:27.00,Default,Lena,0,0,0,,Wait. Did you hear that?
+Dialogue: 0,0:00:30.00,0:00:32.00,Default,Mark,0,0,0,,Probably just the wind.
+Dialogue: 0,0:00:36.00,0:00:39.00,Song,,0,0,0,,{\blur3\fad(150,150)}Running through the night
+Dialogue: 0,0:00:39.10,0:00:42.00,Song,,0,0,0,,{\blur3\fad(150,150)}Chasing every light
