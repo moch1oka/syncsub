@@ -1,7 +1,7 @@
 # syncsub: transfer timing from a timed subtitle to an OCR / softsub subtitle.
 # Based on Sync-timing-subtitles by Luudanmatcuoi (https://github.com/luudanmatcuoi-vn/Sync-timing-subtitles)
 
-import re, argparse, os, sys, json, html, threading, time, webbrowser, unicodedata, socket
+import re, argparse, os, sys, json, html, threading, time, webbrowser, unicodedata, socket, copy
 import yaml, pysubs2, textdistance
 from colour import Color
 from pathlib import Path
@@ -24,23 +24,25 @@ try:
 except FileNotFoundError:
     recent_config = {}
 
-def pysubs2load(str):
+def pysubs2load(path):
+    # UTF-8, or UTF-16 if the file has a UTF-16 BOM
     try:
-        return pysubs2.load(str)
-    except:
-        return pysubs2.load(str, encoding="utf-16")
+        return pysubs2.load(path)
+    except UnicodeDecodeError as e:
+        with open(path, "rb") as f:
+            bom = f.read(2)
+        if bom in (b"\xff\xfe", b"\xfe\xff"):
+            return pysubs2.load(path, encoding="utf-16")
+        raise ValueError("%s is not UTF-8 or UTF-16 text, please convert it to UTF-8 (%s)" % (os.path.basename(path), e))
 
 def get_para_from_recent(default = False):
-    if default:
-        parameter = dict(default_config)
-        parameter.pop('Tooltip', None)
-    else:
-        parameter = dict(default_config)
-        parameter.pop('Tooltip', None)
-        temp_para = dict(recent_config)
+    # Settings of default.yaml, overridden by recent.yaml unless default=True
+    parameter = dict(default_config)
+    parameter.pop('Tooltip', None)
+    if not default:
         for k in parameter.keys():
-            if k in temp_para.keys():
-                parameter[k] = temp_para[k]
+            if k in recent_config:
+                parameter[k] = recent_config[k]
     return parameter
 
 def convert_parameter(save_recent=False):
@@ -79,6 +81,7 @@ def convert_parameter(save_recent=False):
 
 parameter = get_para_from_recent()
 list_characters = parameter["characters"]
+filter_rules_path = os.path.join(root_folder, "filter_rules.txt")
 
 # Break marks for splitting 1 ocr line into many, strongest first ("]" = line break)
 split_punctuation = "].!?;,-"
@@ -241,7 +244,7 @@ def clean_html_from_sub(text):
 
 def apply_sub(a_line, text):
     # Put new text into timed line a_line: keep its {\tags}, turn its old text into {comment}
-    # text can be a string, dict from editor, SSAEvent or [SSAEvent]
+    # text can be a string, dict from editor, SSAEvent or [SSAEvent], already plain text (not HTML)
     if type(a_line) == type([]) and len(a_line) == 1:
         a_line = a_line[0]
     if type(text) == type({}):
@@ -250,7 +253,6 @@ def apply_sub(a_line, text):
         text = text.text
     elif type(text) == type([]) and len(text) == 1:
         text = text[0].text
-    text = clean_html_from_sub(text)
     text = text.replace("\n","\\N")
     text = text.replace("\\n","\\N")
     # Old {comments} become plain text, only {\tags} stay in braces
@@ -452,6 +454,7 @@ def convert_actor(va):
 
 # State shared between prepare() (before editor) and finalize() (after editor submit)
 state = {}
+last_token = 0
 
 def prepare():
     # Load, filter and group lines of 2 subs into state["web_groups"] for the editor
@@ -497,12 +500,16 @@ def prepare():
 
     # Rules: type________find________replace, lines starting with # are skipped
     try:
-        f = open(os.path.join(root_folder, "filter_rules.txt" ), "r", encoding="utf-8")
-        rules = [g.replace("\\n", "\\\\N") for g in f.read().splitlines() if len(g) > 0]
-        rules = [g.split("________") for g in rules if "#" not in g[0]]
-        f.close()
-    except:
-        rules = []
+        with open(filter_rules_path, encoding="utf-8") as f:
+            lines = [g for g in f.read().splitlines() if len(g) > 0 and g[0] != "#"]
+    except OSError:
+        lines = []
+    rules = []
+    for g in lines:
+        r = g.split("________")
+        # \n in a rule = line break: matches / writes \N (escaped in a regex)
+        newline = "\\\\N" if r[0] == "regex" else "\\N"
+        rules += [[p.replace("\\n", newline) for p in r]]
 
     # If > 20% of ocr text is not in "characters", the setting is wrong: only warn, don't remove lines
     tempa = "".join([t.text for t in ocr_sub ]).replace(" ","").replace("\\N","").replace("\n","")
@@ -711,13 +718,20 @@ def prepare():
 
         web_groups+=[web_group]
 
+    # Token identifies this editor session: requests from an older page (or a late draft save) are rejected
+    global last_token
+    last_token += 1
     state.clear()
     state.update({"web_groups": web_groups, "eng_signs": eng_signs, "ocr_signs": ocr_signs,
-                  "comment_group": comment_group, "layer_eng_sub": layer_eng_sub})
+                  "comment_group": comment_group, "layer_eng_sub": layer_eng_sub, "token": last_token})
 
 def finalize(web_return):
     # Apply edited texts from editor to timed lines, add signs and comments back, save .ass
-    web_groups = state["web_groups"]
+    # Works on a copy: if saving fails, state stays intact and Submit can be retried
+    web_groups = copy.deepcopy(state["web_groups"])
+    eng_signs = copy.deepcopy(state["eng_signs"])
+    ocr_signs = copy.deepcopy(state["ocr_signs"])
+    comment_group = copy.deepcopy(state["comment_group"])
     layer_eng_sub = state["layer_eng_sub"]
     best_subtitle = []
     for w in range(len(web_return)):
@@ -794,8 +808,6 @@ def finalize(web_return):
             break
 
     # Signs
-    eng_signs = state["eng_signs"]
-    ocr_signs = state["ocr_signs"]
     if parameter["is_use_sign_timed"] and len(eng_signs)>0:
         for sign in eng_signs:
             if parameter["is_cmt_sign_timed"]:
@@ -813,7 +825,7 @@ def finalize(web_return):
             ocr_sign.type = "Comment"
             best_subtitle+=[ocr_sign]
 
-    for comment in state["comment_group"]:
+    for comment in comment_group:
         best_subtitle += [comment]
 
     # Back to the original order of timed sub
@@ -861,8 +873,8 @@ def episode_number(filename):
     m = re.search(r"[Ss]\d+[Ee](\d+)", name)
     if m:
         return int(m.group(1))
-    # Drop resolution, codec, bit depth, CRC, version (v2)... before taking the last number
-    name = re.sub(r"\d{3,4}p|[xXhH]\.?26[45]|\d+-?bit|\[[0-9A-Fa-f]{8}\]|(?<![A-Za-z])[vV]\d+\b", " ", name)
+    # Drop resolution, codec, bit depth, audio channels (2.0, 5.1), CRC, version (v2)... before taking the last number
+    name = re.sub(r"\d{3,4}p|[xXhH]\.?26[45]|\d+-?bit|(?<!\d)\d\.\d(?!\d)|\[[0-9A-Fa-f]{8}\]|(?<![A-Za-z])[vV]\d+\b", " ", name)
     numbers = re.findall(r"(?<!\d)(\d{1,3})(?!\d)", name)
     return int(numbers[-1]) if numbers else None
 
@@ -1009,7 +1021,7 @@ def config_ui():
         // Open a native file/folder dialog (on the computer running syncsub) and fill the path
         function browse(id, kind) {
             const input = document.getElementById(id);
-            fetch('/browse?kind=' + kind + '&current=' + encodeURIComponent(input.value))
+            fetch('/browse?kind=' + kind + '&current=' + encodeURIComponent(input.value), { headers: { 'X-Syncsub': '1' } })
                 .then(response => response.json())
                 .then(res => { if (res.path) input.value = res.path; });
         }
@@ -1054,27 +1066,38 @@ def config_ui():
 </html>
 """, p=dict(parameter, **batch["form"]), tip=default_config["Tooltip"])
 
+browse_lock = threading.Lock()
+
 @app.route('/browse')
 def browse():
     # Native file/folder dialog on this computer (a web page can't get full paths)
-    import tkinter, tkinter.filedialog
-    kind = request.args.get("kind", "file")
-    current = request.args.get("current", "")
-    initial = current if os.path.isdir(current) else os.path.dirname(current)
-    initial = initial if os.path.isdir(initial) else None
-    root = tkinter.Tk()
-    root.withdraw()
-    root.attributes("-topmost", True)
-    if kind == "folder":
-        path = tkinter.filedialog.askdirectory(parent=root, initialdir=initial)
-    elif kind == "save":
-        path = tkinter.filedialog.asksaveasfilename(parent=root, initialdir=initial, defaultextension=".ass",
-                                                    filetypes=[("ASS subtitle", "*.ass")])
-    else:
-        path = tkinter.filedialog.askopenfilename(parent=root, initialdir=initial,
-                                                  filetypes=[("Subtitle", " ".join("*" + e for e in sub_extensions)), ("All files", "*.*")])
-    root.destroy()
-    return jsonify({"path": os.path.normpath(path) if path else ""})
+    # Custom header: other websites can't send it without a CORS preflight, so they can't pop up dialogs
+    if request.headers.get("X-Syncsub") != "1":
+        return jsonify({"path": ""}), 403
+    # Only 1 dialog at a time (tkinter is not thread-safe)
+    if not browse_lock.acquire(blocking=False):
+        return jsonify({"path": ""})
+    try:
+        import tkinter, tkinter.filedialog
+        kind = request.args.get("kind", "file")
+        current = request.args.get("current", "")
+        initial = current if os.path.isdir(current) else os.path.dirname(current)
+        initial = initial if os.path.isdir(initial) else None
+        root = tkinter.Tk()
+        root.withdraw()
+        root.attributes("-topmost", True)
+        if kind == "folder":
+            path = tkinter.filedialog.askdirectory(parent=root, initialdir=initial)
+        elif kind == "save":
+            path = tkinter.filedialog.asksaveasfilename(parent=root, initialdir=initial, defaultextension=".ass",
+                                                        filetypes=[("ASS subtitle", "*.ass")])
+        else:
+            path = tkinter.filedialog.askopenfilename(parent=root, initialdir=initial,
+                                                      filetypes=[("Subtitle", " ".join("*" + e for e in sub_extensions)), ("All files", "*.*")])
+        root.destroy()
+        return jsonify({"path": os.path.normpath(path) if path else ""})
+    finally:
+        browse_lock.release()
 
 @app.route('/process', methods=['POST'])
 def process_route():
@@ -1294,6 +1317,8 @@ def editor():
 
     <script>
         // Long {tags} are shown collapsed as {…}, click to expand
+        // Editor session of this page, sent with draft / submit requests
+        const TOKEN = "{{token}}";
         const TAG_COLLAPSE_THRESHOLD = 5;
         let allTagsExpanded = false;
 
@@ -1448,7 +1473,7 @@ def editor():
             document.querySelectorAll(".event-text-b").forEach(el => {
                 texts[el.getAttribute("block-id") + "_" + el.getAttribute("line-stt")] = restoreAssTags(el.innerHTML);
             });
-            fetch('/draft', {
+            fetch('/draft?token=' + TOKEN, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(texts)
@@ -1461,7 +1486,7 @@ def editor():
             draftTimer = setTimeout(save_draft, 1000);
         }
         function restore_draft() {
-            fetch('/draft')
+            fetch('/draft?token=' + TOKEN)
                 .then(response => response.json())
                 .then(texts => {
                     if (Object.keys(texts).length === 0) return;
@@ -1553,7 +1578,7 @@ def editor():
             }
             const result = document.getElementById("submit-result");
             clearTimeout(draftTimer);
-            fetch('/submit', {
+            fetch('/submit?token=' + TOKEN, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -1582,7 +1607,11 @@ def editor():
 </body>
 </html>
 """
-    return render_template_string(template_string, title=til)
+    return render_template_string(template_string, title=til, token=state.get("token", 0))
+
+def valid_token():
+    # Request comes from the editor page of the current file / episode
+    return "web_groups" in state and request.args.get("token") == str(state["token"])
 
 @app.route('/data')
 def get_data():
@@ -1622,7 +1651,7 @@ def get_data():
 @app.route('/submit', methods=['POST'])
 def submit():
     web_return = request.json
-    if "web_groups" not in state or len(web_return) != len(state["web_groups"]):
+    if not valid_token() or len(web_return) != len(state["web_groups"]):
         return jsonify({'success': False, 'message': 'Data does not match current file, please process again.'})
     try:
         draft = draft_path()
@@ -1646,8 +1675,10 @@ def submit():
 @app.route('/draft', methods=['GET', 'POST'])
 def draft():
     # Draft = edited texts of editor, only valid for the same input files and groups
+    if not valid_token():
+        return jsonify({} if request.method == 'GET' else {'success': False})
     key = {"origin_sub_path": parameter["origin_sub_path"], "ocr_sub_path": parameter["ocr_sub_path"],
-           "groups": len(state.get("web_groups", []))}
+           "groups": len(state["web_groups"])}
     if request.method == 'POST':
         with open(draft_path(), "w", encoding="utf-8") as f:
             json.dump(dict(key, texts=request.json), f, ensure_ascii=False)
