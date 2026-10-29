@@ -39,6 +39,19 @@ class UnitTest(unittest.TestCase):
         text = "a" * 70
         self.assertEqual(sync.split_vietnamese_sentence(text), text)
 
+    def test_split_removes_dash_after_tags(self):
+        self.assertEqual(sync.split_line("{\\an8}- Cách nhanh nhất là không kích.\\N- Ở Night City à?"),
+                         ["{\\an8}Cách nhanh nhất là không kích.", "Ở Night City à?"])
+        self.assertEqual(sync.split_line("{\\i1}- Sao thế ạ?{\\i0}\\N{\\i1}- Anh đang lên hình đấy.{\\i0}"),
+                         ["{\\i1}Sao thế ạ?{\\i0}", "{\\i1}Anh đang lên hình đấy.{\\i0}"])
+        self.assertEqual(sync.split_line("{\\i1}- mau lên…{\\i0}\\N{\\i1}- Mau lên.{\\i0}"),
+                         ["{\\i1}Mau lên…{\\i0}", "{\\i1}Mau lên.{\\i0}"])
+
+    def test_strip_ocr_tags(self):
+        sync.parameter["strip_ocr_tags"] = True
+        self.make_pair("Hello", "{\\an8}{\\i1}Xin chào{\\i0}")
+        self.assertEqual(sync.state["web_groups"][0]["group_b"][0].text, "Xin chào")
+
     def test_clean_inline_comment_keeps_bracket(self):
         self.assertEqual(sync.clean_inline_comment("[Music]{note}\\Nabc"), "[Music]\\Nabc")
 

@@ -112,11 +112,10 @@ def split_line(stri):
         result = [stri]
 
     for ia in range(len(result)):
-        # Remove break marker and leading dash/dot, capitalize
+        # Remove break marker and leading dash/dot (also after leading {\tags}), capitalize
         result[ia] = result[ia].replace("]", "").lstrip().rstrip()
-        result[ia] = re.sub(r"^( ){0,3}[-\.]( ){0,3}","",result[ia])
-        if len(result[ia])>0:
-            result[ia] = result[ia][0].upper() + result[ia][1:]
+        result[ia] = re.sub(r"^((?:\{[^{}]*\})*)( ){0,3}[-\.]( ){0,3}", r"\1", result[ia])
+        result[ia] = re.sub(r"^((?:\{[^{}]*\})*)(.)", lambda m: m.group(1) + m.group(2).upper(), result[ia])
 
     try:
         result.remove("")
@@ -533,6 +532,8 @@ def prepare():
             continue
         # Fix decomposed unicode (e + ◌́ -> é)
         ocr_sub[i_ocr].text = unicodedata.normalize("NFC", ocr_sub[i_ocr].text)
+        if parameter["strip_ocr_tags"]:
+            ocr_sub[i_ocr].text = re.sub(r"\{\\[^{}]*\}", "", ocr_sub[i_ocr].text)
         for r in rules:
             if r[0] == "replace":
                 if "\\u" in r[1]:
@@ -982,6 +983,9 @@ def config_ui():
             <div class="checkbox-group">
                 <label title="{{ tip.comment_timed_sub }}"><input type="checkbox" id="comment_timed_sub" {{ 'checked' if p.comment_timed_sub else '' }}> Comment lines that only appear in timed sub</label>
             </div>
+            <div class="checkbox-group">
+                <label title="{{ tip.strip_ocr_tags }}"><input type="checkbox" id="strip_ocr_tags" {{ 'checked' if p.strip_ocr_tags else '' }}> Remove {\\tags} of OCR sub (italic, \\an8...)</label>
+            </div>
 
             <h3>For Sign:</h3>
             <div class="checkbox-group">
@@ -1033,6 +1037,7 @@ def config_ui():
                 ocr_sub_path: document.getElementById('ocr_sub_path').value,
                 output_filename: document.getElementById('output_filename').value,
                 comment_timed_sub: document.getElementById('comment_timed_sub').checked,
+                strip_ocr_tags: document.getElementById('strip_ocr_tags').checked,
                 is_use_sign_timed: document.getElementById('is_use_sign_timed').checked,
                 is_cmt_sign_timed: document.getElementById('is_cmt_sign_timed').checked,
                 is_use_sign_ocr: document.getElementById('is_use_sign_ocr').checked,

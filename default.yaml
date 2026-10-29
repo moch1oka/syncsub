@@ -7,6 +7,7 @@ custom_shift: 0.0
 max_line_length: 62
 comment_timed_sub: true
 keep_timed_text: true
+strip_ocr_tags: false
 is_use_sign_timed: true
 is_cmt_sign_timed: true
 is_use_sign_ocr: true
@@ -26,6 +27,7 @@ Tooltip:
   max_line_length: "Ocr lines longer than this (without line break) are wrapped into 2 rows. Default: 62"
   comment_timed_sub: "Comment lines that only appear in timed subtitle. Lines that only appear in ocr subtitle are always commented. Default: True"
   keep_timed_text: "Keep text of timed sub as {comment} before the new text. Default: True"
+  strip_ocr_tags: "Remove all {\\tags} (italic, \\an8...) from dialogue of ocr sub, only plain text is kept. Signs are not affected. Default: False"
   is_use_sign_timed: "Add sign from timed_sub"
   is_cmt_sign_timed: "Comment sign from timed_sub"
   is_use_sign_ocr: "Add sign from ocr_sub, always commented"
