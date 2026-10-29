@@ -83,46 +83,58 @@ parameter = get_para_from_recent()
 list_characters = parameter["characters"]
 filter_rules_path = os.path.join(root_folder, "filter_rules.txt")
 
-# Break marks for splitting 1 ocr line into many, strongest first ("]" = line break)
+# Break marks counted to choose which ocr line to split first ("]" = line break)
 split_punctuation = "].!?;,-"
 # Colors of lines in split/combine groups of editor
 editor_colors = ["green", "blue", "red", "purple", "orange", "yellow"]
 
-def split_line(stri):
-    # Split 1 line into 2 at the strongest break mark of split_punctuation
-    # A \N before a lowercase word is just wrapping, not a break
-    temp_split_line = re.sub(r'^\\N {0,5}([a-z0-9' +re.escape(list_characters.lower())+r"])", r" \1", stri)
-    temp_split_line = temp_split_line.replace("\\N", " ] ")
-    # Tokens: runs of text, "..." or runs of punctuation
-    temp_split_line = re.findall(
-        r"[^!\"#$%&\\\'()*+,\-.\/:;<=>?@\[\\\]^_`{|}~]+|\.\.\.|[!\"#$%&\\\'()*+,\-.\/:;<=>?@\[\\\\\]^_`{|}~]+", temp_split_line)
+def visible_text(stri):
+    # Text as shown on screen: no {tags}, \N as space
+    return re.sub(r"\{[^{}]*\}", "", stri).replace("\\N", " ")
 
-    result = ""
-    for ch in split_punctuation:
-        if ch in temp_split_line and result=="":
-            result = ["".join(temp_split_line[:temp_split_line.index(ch)+1]), \
-                    "".join(temp_split_line[temp_split_line.index(ch)+1:])]
-            try:
-                result.remove("")
-            except:
-                pass
-            if len(result)==1:
-                result = ""
-    if result == "":
-        result = [stri]
+def split_line(stri, target=0.5):
+    # Split 1 line into 2. Break kinds, strongest first:
+    #   0: line break before a dialogue dash (2 speakers)   1: end of sentence (. ! ? …)
+    #   2: other line break, ; :                            3: , or " - "
+    # A line break before a lowercase word is just wrapping, not a break.
+    # Among breaks of the strongest kind, take the one where the 1st piece's share of text is closest to target
+    # (share of time of the 1st timed line).
+    masked = re.sub(r"\{[^{}]*\}", lambda m: "\x00" * len(m.group(0)), stri)  # same positions, tags hidden
+    breaks = []  # (kind, cut start, cut end)
+    for m in re.finditer(r"\\N", masked):
+        before = masked[:m.start()].replace("\x00", "").rstrip()
+        after = masked[m.end():].replace("\x00", "").lstrip()
+        if after.startswith("-"):
+            breaks += [(0, m.start(), m.end())]
+        elif after[:1].islower():
+            continue
+        elif before[-1:] in ".!?…":
+            breaks += [(1, m.start(), m.end())]
+        else:
+            breaks += [(2, m.start(), m.end())]
+    breaks += [(1, m.end(), m.end()) for m in re.finditer(r"[.!?…]+(?= )", masked)]
+    breaks += [(2, m.end(), m.end()) for m in re.finditer(r"[;:](?= )", masked)]
+    breaks += [(3, m.end(), m.end()) for m in re.finditer(r",(?= )", masked)]
+    breaks += [(3, m.start(), m.start()) for m in re.finditer(r" -(?= )", masked)]
+    if len(breaks) == 0:
+        return [stri]
+    best = min(b[0] for b in breaks)
+    total = max(len(visible_text(stri)), 1)
+    _, cut_start, cut_end = min([b for b in breaks if b[0] == best],
+                                key=lambda b: abs(len(visible_text(stri[:b[1]])) / total - target))
 
-    for ia in range(len(result)):
-        # Remove break marker and leading dash/dot (also after leading {\tags}), capitalize
-        result[ia] = result[ia].replace("]", "").lstrip().rstrip()
-        result[ia] = re.sub(r"^((?:\{[^{}]*\})*)( ){0,3}[-\.]( ){0,3}", r"\1", result[ia])
-        result[ia] = re.sub(r"^((?:\{[^{}]*\})*)(.)", lambda m: m.group(1) + m.group(2).upper(), result[ia])
-
-    try:
-        result.remove("")
-    except:
-        pass
-
-    return result
+    result = []
+    for piece in (stri[:cut_start], stri[cut_end:]):
+        # Wrapping line breaks (before lowercase) become spaces, the piece is a new line now
+        piece = re.sub(r"\s*\\N\s*(?=(?:\{[^{}]*\})*[^\W\d_])",
+                       lambda m: " " if visible_text(piece[m.end():]).lstrip()[:1].islower() else m.group(0), piece)
+        piece = piece.strip()
+        # Remove leading dash/dot (also after leading {\tags}), capitalize
+        piece = re.sub(r"^((?:\{[^{}]*\})*)( ){0,3}[-\.]( ){0,3}", r"\1", piece)
+        piece = re.sub(r"^((?:\{[^{}]*\})*)(.)", lambda m: m.group(1) + m.group(2).upper(), piece)
+        if visible_text(piece).strip():
+            result += [piece]
+    return result or [stri]
 
 def cal_same_time(line1, line2):
     # Overlap of 2 lines in ms
@@ -374,7 +386,11 @@ def split_sub(a_group, b_group):
     def count_split_symbol(stri):
         return sum([stri.count(gt) for gt in split_punctuation])
     def split_line_dict(sow):
-        kwow = split_line(sow["text"])
+        # Target share of the 1st piece = share of time of the 1st timed line overlapping this ocr line
+        line = pysubs2.SSAEvent(start=sow["start"], end=sow["end"])
+        overlaps = [o for o in (cal_same_time(a, line) for a in a_group) if o > 0]
+        target = overlaps[0] / sum(overlaps) if len(overlaps) >= 2 else 0.5
+        kwow = split_line(sow["text"], target)
         return [{"text":kwows,"splited":True,
                  "start": sow["start"], "end": sow["end"],
                  "count":count_split_symbol(kwows)} for kwows in kwow]

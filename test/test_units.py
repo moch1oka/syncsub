@@ -47,6 +47,21 @@ class UnitTest(unittest.TestCase):
         self.assertEqual(sync.split_line("{\\i1}- mau lên…{\\i0}\\N{\\i1}- Mau lên.{\\i0}"),
                          ["{\\i1}Mau lên…{\\i0}", "{\\i1}Mau lên.{\\i0}"])
 
+    def test_split_prefers_sentence_end_near_time_ratio(self):
+        # Timed lines 1s + 4s, ocr line has 2 rows wrapped mid-sentence: split after "nhé!", not at the row break
+        a = [pysubs2.SSAEvent(start=1504000, end=1505000, text="Ping me when you get there!"),
+             pysubs2.SSAEvent(start=1505000, end=1509000, text="I'll come visit! And scroll you again.")]
+        b = [pysubs2.SSAEvent(start=1504000, end=1508000,
+                              text="Đến nơi nhớ nhắn tin nhé! Tôi nhất định\\Nsẽ ghé thăm. Rồi quay cậu.")]
+        _, pieces, _ = sync.split_sub(a, b)
+        self.assertEqual([p.text for p in pieces], ["Đến nơi nhớ nhắn tin nhé!", "Tôi nhất định sẽ ghé thăm. Rồi quay cậu."])
+        # Same with an uppercase 2nd row: the row break is weaker than "!", so the result is the same split
+        self.assertEqual(sync.split_line("Đến nơi nhớ nhắn tin nhé! Tôi nhất định\\NSẽ ghé thăm.", 0.25)[0],
+                         "Đến nơi nhớ nhắn tin nhé!")
+        # Time ratio picks between 2 sentence ends
+        self.assertEqual(sync.split_line("Một. Hai ba bốn năm sáu. Bảy.", 0.8), ["Một. Hai ba bốn năm sáu.", "Bảy."])
+        self.assertEqual(sync.split_line("Một. Hai ba bốn năm sáu. Bảy.", 0.1), ["Một.", "Hai ba bốn năm sáu. Bảy."])
+
     def test_strip_ocr_tags(self):
         sync.parameter["strip_ocr_tags"] = True
         self.make_pair("Hello", "{\\an8}{\\i1}Xin chào{\\i0}")
